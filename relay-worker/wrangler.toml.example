@@ -1,0 +1,33 @@
+# 中转 Worker 的部署配置示例。
+#
+# 用法：复制成 wrangler.toml（该文件被 .gitignore 排除，不会进公开仓库），
+# 把 IP_KV 的 id 换成自己的 namespace id，然后：
+#
+#   cp wrangler.toml.example wrangler.toml
+#   # 编辑 id 与 routes
+#   wrangler secret put RELAY_TOKEN   # 粘贴与容器环境变量 RELAY_TOKEN 相同的值
+#   wrangler deploy
+#
+# RELAY_TOKEN 用 secret 而不是 [vars]：secret 加密存储，[vars] 是明文，一旦有人
+# cat 配置或贴到 issue 里就泄了 —— 而这个 token 等于「往订阅里写 IP」的权限。
+
+name = "ip-relay"
+# 用 .mjs 而不是 .js：明确告诉打包器这是 ES module，
+# 否则有概率被当成 Service Worker 语法上传，线上每个请求都返回 error 1101
+main = "worker.mjs"
+compatibility_date = "2026-08-07"
+
+workers_dev = true
+
+# ⚠️ 必须在 [[kv_namespaces]] 之前。TOML 里写在表后面会被当成那张表的字段，
+# wrangler 只会警告一句 "Unexpected fields found in kv_namespaces[0]"，绑定静默失败。
+#
+# 自定义域名（推荐，实测也是唯一稳定可用的入口）：
+# 域名必须已经托管在同一个 CF 账号下（zone 状态 active）。
+routes = [{ pattern = "bestip.example.com", custom_domain = true }]
+
+[[kv_namespaces]]
+binding = "IP_KV"
+# ← 换成 `wrangler kv namespace list` 里那个 id。容器侧不需要它，
+#   只要 Worker 这一处绑对，写入和读取都走这个 binding。
+id = "REPLACE_WITH_NAMESPACE_ID"

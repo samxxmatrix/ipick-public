@@ -1,0 +1,6 @@
+# 本地部署配置含 RELAY_TOKEN 等密钥，切勿提交
+wrangler.toml
+
+# 本地数据 / 日志
+data/
+*.log
