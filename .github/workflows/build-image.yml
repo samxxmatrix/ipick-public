@@ -1,0 +1,71 @@
+name: Build and push image
+
+# 为什么构建放在这个公共仓、而不是源码仓：
+# 用 GITHUB_TOKEN 发布到 GHCR 的包会自动关联到「运行该 workflow 的仓库」。
+# 若在私有源码仓 ipick 里构建，包就绑回 ipick，ipick 一旦转私有，镜像也跟着变私有。
+# 因此改由公共仓 ipick-public 运行构建：包天然关联本仓（public），与源码仓可见性彻底解耦。
+# 源码通过 SOURCE_TOKEN（repo 权限的 PAT）临时拉取，不落地到本仓历史。
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [source-updated]
+
+permissions:
+  contents: read    # 本仓只读，构建产物走包权限
+  packages: write   # 推送镜像到 GHCR
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: samxxmatrix/ipick-public
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout private source
+        uses: actions/checkout@v4
+        with:
+          repository: samxxmatrix/ipick
+          token: ${{ secrets.SOURCE_TOKEN }}
+          path: src
+
+      - name: Read version
+        id: ver
+        # 版本号唯一来源：server/__init__.py 的 __version__；读不到就失败
+        working-directory: src
+        run: |
+          VERSION=$(grep -oP '__version__\s*=\s*"\K[^"]+' server/__init__.py)
+          if [ -z "$VERSION" ]; then
+            echo "::error::没能从 server/__init__.py 读出 __version__"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "minor=${VERSION%.*}" >> "$GITHUB_OUTPUT"
+          echo "版本号 $VERSION（major.minor=${VERSION%.*}）"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.minor }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/samxxmatrix/ipick-public
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
