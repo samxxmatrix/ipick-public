@@ -12,7 +12,7 @@ on:
     types: [source-updated]
 
 permissions:
-  contents: read    # 本仓只读，构建产物走包权限
+  contents: write   # 构建成功后给本仓打 v* tag（/api/update 读的就是这些 tag）
   packages: write   # 推送镜像到 GHCR
 
 env:
@@ -69,3 +69,23 @@ jobs:
             org.opencontainers.image.version=${{ steps.ver.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # 版本 tag 打在本仓：服务端 /api/update 用未认证请求读的就是这里的 tags。
+      # 放在构建之后 —— 构建失败就不该留下一个指向坏版本的 tag。
+      # GITHUB_TOKEN 推的 tag 不会递归触发本 workflow。
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          path: self
+
+      - name: Tag release
+        working-directory: self
+        run: |
+          TAG="v${{ steps.ver.outputs.version }}"
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
+            echo "$TAG 已存在，跳过"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "已创建并推送 $TAG"
+          fi
