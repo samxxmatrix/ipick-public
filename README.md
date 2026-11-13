@@ -234,6 +234,30 @@ docker compose pull && docker compose up -d
 
 ---
 
+## 落地（出口 IP 在哪）
+
+结果表里有一列「落地」，输出行尾也会带 `#国家名`：
+
+```
+104.16.1.2:443#日本 | 104.16.1.2
+```
+
+这里说的「国家」是**这条 IP 把你送进哪个 Cloudflare 机房**，也就是你实际的出口位置。
+
+- 表格「落地」列显示「城市 国家」（如 `东京 日本`），鼠标悬停可看原始三字码
+- 输出文件 / KV 里写 `ip:端口#国家名 | ip`；香港 / 澳门 / 台湾 / 巴勒斯坦按中文地区名写
+- 三字码是 IATA 机场码，永不变；表里缺的只会是 CF 新开的机房，此时直接显示原码，不报错
+
+映射表是 `data/colo_map.json`（344 条中英对照，首次启动自动生成）。CF 新开机房后刷新它：
+
+```bash
+docker exec ipick python /app/server/gen_colo_map.py
+```
+
+不用重建镜像，服务在跑也能直接刷；也可以自己改这个文件，服务端按修改时间自动重载。
+
+---
+
 ## 中转：怎么配
 
 「中转」指的是：IPick 跑完一轮，把筛好的 IP 列表推给中转 Worker，Worker 用 KV binding  
@@ -280,10 +304,5 @@ IPick 容器 ──PUT /_push/ips/{slug}──> 中转 Worker ──> Cloudflare
 | `data/logs/`   | 运行日志（`ipick.log`，按 5MB×3 轮转） | 否                              |
 | `data/colo_map.json` | 落地机房 → 城市/国家 对照表（344 条，首次启动自动生成） | 否                        |
 
-`colo_map.json` 决定结果表「落地」列和输出行尾 `#国家名` 的显示。想刷新（CF 新开机房时）：
-
-```bash
-docker exec ipick python /app/server/gen_colo_map.py
-```
-
-不需要重建镜像；文件直接改也可以，服务端按修改时间自动重载。
+`colo_map.json` 决定结果表「落地」列和输出行尾 `#国家名` 的显示，刷新命令见上面
+「落地（出口 IP 在哪）」一节——直接改这个文件也生效，不用重启。
