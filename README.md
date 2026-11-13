@@ -28,7 +28,7 @@ IPick 在本地跑多级测速（TCP → HTTP → 下载），按条件筛选
           确认是真节点、不是只开放了测速端口的「假可用」IP
         │
         ▼
-生成 {随机名}.txt（每行一个 IP:端口，最优的排前面）
+生成 {随机名}.txt（每行 `IP:端口#落地国家 | IP`，最优的排前面）
         │
         ├─► 代理项目直接拉这个列表当订阅源
         └─► 或推到 Cloudflare KV，再由中转 Worker 分发给跨账号的代理
@@ -278,3 +278,12 @@ IPick 容器 ──PUT /_push/ips/{slug}──> 中转 Worker ──> Cloudflare
 | `data/db/`     | SQLite 数据库（配置、运行记录）          | 否                              |
 | `data/output/` | 每轮筛出的 IP 列表（`{slug}.txt`）    | **是**（仅此目录，给代理 / 中转 Worker 拉取） |
 | `data/logs/`   | 运行日志（`ipick.log`，按 5MB×3 轮转） | 否                              |
+| `data/colo_map.json` | 落地机房 → 城市/国家 对照表（344 条，首次启动自动生成） | 否                        |
+
+`colo_map.json` 决定结果表「落地」列和输出行尾 `#国家名` 的显示。想刷新（CF 新开机房时）：
+
+```bash
+docker exec ipick python /app/server/gen_colo_map.py
+```
+
+不需要重建镜像；文件直接改也可以，服务端按修改时间自动重载。
