@@ -4,9 +4,6 @@
 你把网上现成的可用 IP 集合丢给它，它在本地逐个测速、按你定的条件筛掉差的，挑出最好用的一批，再交给你在  
 Cloudflare 上部署的代理项目当订阅源用。
 
-本仓库是 IPick 的**公开门面仓库**，仅包含：中转 Worker 源码（`relay-worker/`）、使用说明与许可证。  
-服务端以 Docker 镜像形式由作者构建并发布到 GitHub Container Registry，你直接拉取运行即可，**无需获取服务端源码**：
-
 - 镜像：`ghcr.io/samxxmatrix/ipick-public:latest`
 - 源码许可：见 [LICENSE](./LICENSE)（专有闭源，保留一切权利）
 
