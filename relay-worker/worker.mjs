@@ -1,7 +1,7 @@
 /**
  * 中转 Worker：读 KV 里的 IP 列表公开出来，同时接住容器的推送。
  *
- *   GET    /ips/{slug}          → 公开读，纯文本（每行 IP:端口）
+ *   GET    /ips/{slug}          → 公开读，纯文本（每行 IP:端口，可带 #落地备注）
  *   PUT    /_push/ips/{slug}    → 容器推送（需 Bearer RELAY_TOKEN）
  *   DELETE /_push/ips/{slug}    → 容器删集（需 Bearer RELAY_TOKEN）
  *   POST   /_push/probe         → 测试连接：写→读回→删探针 key（需 Bearer RELAY_TOKEN）
@@ -216,7 +216,8 @@ async function probe(request, env) {
  * 校验整份列表。返回 ``{ok: true, count}`` 或 ``{ok: false, reason}``。
  *
  * 规则：空 body 合法（本轮一条都没过筛）；只容忍结尾一个换行；中间空行一律拒绝；
- * 每行必须是 IPv4:端口。端口不接受前导 0（"043" 看着像八进制，容易被误读）。
+ * 每行必须是 IPv4:端口，其后可跟 ``#备注``（落地国家名，客户端可忽略）。
+ * 端口不接受前导 0（"043" 看着像八进制，容易被误读）。
  */
 function checkList(body) {
   if (body === '') return { ok: true, count: 0 };
@@ -234,13 +235,21 @@ function checkList(body) {
   return { ok: true, count: lines.length };
 }
 
-/** 严格校验 ``IPv4:端口``（第一阶段测速本身就只在 IPv4 上做）。 */
+/**
+ * 严格校验 ``IPv4:端口``（第一阶段测速本身就只在 IPv4 上做）。
+ *
+ * 允许尾随 ``#备注``：服务端会把落地国家名写成 ``1.2.3.4:443#日本 | 1.2.3.4``。
+ * 校验只看 ``#`` 之前的部分，备注内容不参与解析 —— 否则端口会被读成
+ * ``443#日本 | 1.2.3.4`` 而整份被拒。
+ */
 function isEndpoint(line) {
-  const colon = line.lastIndexOf(':');
+  const hash = line.indexOf('#');
+  const endpoint = hash >= 0 ? line.slice(0, hash) : line;
+  const colon = endpoint.lastIndexOf(':');
   if (colon <= 0) return false;
 
-  const host = line.slice(0, colon);
-  const port = line.slice(colon + 1);
+  const host = endpoint.slice(0, colon);
+  const port = endpoint.slice(colon + 1);
 
   if (!/^[1-9]\d{0,4}$/.test(port)) return false;
   if (Number(port) > 65535) return false;
